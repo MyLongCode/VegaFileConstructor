@@ -1,0 +1,35 @@
+@model WizardStep2Vm
+<h3>Шаг 2 из 3 — Ввод данных</h3>
+<div class="progress mb-3"><div class="progress-bar" style="width:66%"></div></div>
+<div class="row">
+<div class="col-lg-8">
+<form method="post" asp-action="Step3">
+    <input type="hidden" asp-for="TemplateId" />
+    <input type="hidden" asp-for="TemplateName" />
+    <input type="hidden" asp-for="TemplateVersion" />
+    <div asp-validation-summary="ModelOnly" class="text-danger"></div>
+    @foreach (var grp in Model.Fields.GroupBy(f => f.Group ?? "Общее"))
+    {
+        <h5 class="mt-3">@grp.Key</h5>
+        @foreach (var f in grp.OrderBy(x => x.Order))
+        {
+            <input type="hidden" name="Fields.Index" value="@Model.Fields.IndexOf(f)" />
+            <input type="hidden" name="Fields[@Model.Fields.IndexOf(f)].Key" value="@f.Key" />
+            <input type="hidden" name="Fields[@Model.Fields.IndexOf(f)].Label" value="@f.Label" />
+            <input type="hidden" name="Fields[@Model.Fields.IndexOf(f)].Group" value="@f.Group" />
+            <div class="mb-3">
+                <label class="form-label">@f.Label</label>
+                <input class="form-control" name="Fields[@Model.Fields.IndexOf(f)].Value" value="@f.Value" placeholder="@f.Placeholder" type="@(f.DataType == TemplateDataType.Date ? "date" : "text")" />
+                <small class="text-muted">@f.HelpText</small>
+            </div>
+        }
+    }
+    <a class="btn btn-secondary" asp-action="Step1">Назад</a>
+    <button type="reset" class="btn btn-outline-warning">Очистить форму</button>
+    <button class="btn btn-primary">Далее</button>
+</form>
+</div>
+<div class="col-lg-4">
+    <div class="card"><div class="card-body"><h5>Предпросмотр данных</h5><p class="text-muted">Заполненные поля будут показаны на следующем шаге перед генерацией.</p></div></div>
+</div>
+</div>
