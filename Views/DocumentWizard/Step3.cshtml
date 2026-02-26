@@ -1,0 +1,16 @@
+@model WizardConfirmVm
+<h3>Шаг 3 из 3 — Подтверждение</h3>
+<div class="progress mb-3"><div class="progress-bar" style="width:100%"></div></div>
+<div class="card mb-3"><div class="card-body">
+    <h5>@Model.TemplateName (v@Model.TemplateVersion)</h5>
+    <ul>
+        @foreach (var item in Model.Values)
+        {
+            <li><b>@item.Key:</b> @item.Value</li>
+        }
+    </ul>
+</div></div>
+<form method="post" asp-action="Generate">
+    <button class="btn btn-success btn-lg">Сгенерировать</button>
+    <a class="btn btn-secondary" asp-action="Step1">Создать ещё</a>
+</form>
