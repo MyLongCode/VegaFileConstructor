@@ -11,7 +11,13 @@ public class PdfGeneratorService(IWebHostEnvironment env) : IPdfGeneratorService
     public Task<string> GenerateAsync(DocumentTemplate template, IEnumerable<TemplateFieldPlacement> placements, Dictionary<string, string> values, string outputPath)
     {
         var sourcePath = Path.Combine(env.WebRootPath, template.TemplateFilePath.Replace('/', Path.DirectorySeparatorChar));
-        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        var outputDirectory = Path.GetDirectoryName(outputPath);
+        if (string.IsNullOrWhiteSpace(outputDirectory))
+        {
+            throw new ArgumentException($"Output path must include a directory: {outputPath}", nameof(outputPath));
+        }
+
+        Directory.CreateDirectory(outputDirectory);
 
         if (!File.Exists(sourcePath))
         {
@@ -19,7 +25,8 @@ public class PdfGeneratorService(IWebHostEnvironment env) : IPdfGeneratorService
         }
 
         using var reader = new PdfReader(sourcePath);
-        using var writer = new PdfWriter(outputPath);
+        using var outputStream = new FileStream(outputPath, FileMode.Create, FileAccess.Write, FileShare.None);
+        using var writer = new PdfWriter(outputStream);
         using var pdf = new PdfDocument(reader, writer);
         var font = PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
 
