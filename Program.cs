@@ -6,7 +6,7 @@ using VegaFileConstructor.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection") ?? "Data Source=app.db"));
+    options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection") ?? "Host=localhost;Port=5432;Database=vega_file_constructor;Username=postgres;Password=postgres"));
 
 builder.Services.AddDatabaseDeveloperPageExceptionFilter();
 
