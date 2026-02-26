@@ -1,0 +1,21 @@
+@model TemplateSelectionVm
+<h3>Шаг 1 из 3 — Выбор типа документа</h3>
+<div class="progress mb-3"><div class="progress-bar" style="width:33%"></div></div>
+<form class="row g-2 mb-3" method="get">
+    <div class="col-md-4"><input class="form-control" name="search" value="@Model.Search" placeholder="Поиск по названию" /></div>
+    <div class="col-md-3 form-check mt-2"><input class="form-check-input" type="checkbox" name="activeOnly" value="true" checked="@Model.ActiveOnly" /> <label class="form-check-label">Только активные</label></div>
+    <div class="col-md-2"><button class="btn btn-outline-primary">Фильтр</button></div>
+</form>
+<div class="row">
+@foreach (var t in Model.Templates)
+{
+    <div class="col-md-6 mb-3">
+        <div class="card"><div class="card-body">
+            <h5>@t.Name</h5>
+            <p>@t.Description</p>
+            <span class="badge bg-secondary">v @t.Version</span>
+            <a class="btn btn-primary float-end" asp-action="Step2" asp-route-templateId="@t.Id">Выбрать</a>
+        </div></div>
+    </div>
+}
+</div>
