@@ -1,19 +1,24 @@
 using iText.IO.Font;
 using iText.IO.Font.Constants;
+using iText.Kernel.Colors;
 using iText.Kernel.Font;
+using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas;
-using iText.Layout;
-using iText.Layout.Element;
-using iText.Layout.Properties;
+using iText.Kernel.Pdf.Canvas.Parser;
+using iText.Kernel.Pdf.Canvas.Parser.Data;
+using iText.Kernel.Pdf.Canvas.Parser.Listener;
 using System.Text;
 
 namespace VegaFileConstructor.Services;
 
 public class PdfTextReplaceService : IPdfTextReplaceService
 {
-    private const float MinFontSize = 8f;
     private const string DefaultFontPath = @"C:\Windows\Fonts\arial.ttf";
+    private const float MinFontSize = 4f;
+    private const float MaxFontScale = 0.98f;
+    private const float LineGroupTolerance = 2.5f;
+    private const float WhiteoutPadding = 0.8f;
 
     private static readonly Encoding Latin1Encoding = Encoding.Latin1;
     private static readonly Encoding Cp1251Encoding;
@@ -29,6 +34,11 @@ public class PdfTextReplaceService : IPdfTextReplaceService
         string outputPath,
         IReadOnlyList<PdfTextReplacementInput> replacements)
     {
+        if (replacements.Count == 0)
+        {
+            return new PdfTextReplaceSummary(Array.Empty<PdfTextReplacementResult>(), 0, 0);
+        }
+
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
         await using var input = File.OpenRead(sourcePath);
@@ -38,76 +48,59 @@ public class PdfTextReplaceService : IPdfTextReplaceService
         using var pdfWriter = new PdfWriter(output);
         using var pdfDoc = new PdfDocument(pdfReader, pdfWriter);
 
-        var font = CreateUnicodeFont();
-        var pageCount = pdfDoc.GetNumberOfPages();
+        var replacementFont = CreateUnicodeFont();
+        var pageModels = ExtractPageModels(pdfDoc);
+        var orderedReplacements = replacements.OrderBy(x => x.Order).ToList();
+        var results = new List<PdfTextReplacementResult>(orderedReplacements.Count);
 
-        var workingText = new Dictionary<int, string>();
-        var results = new List<PdfTextReplacementResult>();
-
-        for (var i = 1; i <= pageCount; i++)
+        foreach (var replacement in orderedReplacements)
         {
-            var page = pdfDoc.GetPage(i);
-            var extractedText = iText.Kernel.Pdf.Canvas.Parser.PdfTextExtractor.GetTextFromPage(page);
-            workingText[i] = NormalizeExtractedText(extractedText);
-        }
+            var foundCount = 0;
+            var appliedCount = 0;
 
-        foreach (var replacement in replacements.OrderBy(x => x.Order))
-        {
-            var found = 0;
-
-            foreach (var pageNum in workingText.Keys.ToList())
+            foreach (var pageModel in pageModels)
             {
-                found += CountOccurrences(workingText[pageNum], replacement.OldValue);
-                workingText[pageNum] = workingText[pageNum].Replace(
-                    replacement.OldValue,
-                    replacement.NewValue,
-                    StringComparison.Ordinal);
+                var page = pdfDoc.GetPage(pageModel.PageNumber);
+                var canvas = new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), pdfDoc);
+
+                foreach (var group in pageModel.Groups)
+                {
+                    var matches = FindMatches(group.NormalizedText, replacement.OldValue);
+                    foundCount += matches.Count;
+
+                    foreach (var match in matches)
+                    {
+                        var fragments = group.GetFragmentsInRange(match.Start, match.Length);
+                        if (fragments.Count == 0)
+                        {
+                            continue;
+                        }
+
+                        var area = UnionBounds(fragments.Select(x => x.Bounds));
+                        if (area.GetWidth() <= 0 || area.GetHeight() <= 0)
+                        {
+                            continue;
+                        }
+
+                        PaintWhiteRectangle(canvas, area);
+                        DrawReplacementText(canvas, replacementFont, replacement.NewValue, area, fragments);
+                        appliedCount++;
+                    }
+                }
             }
 
             results.Add(new PdfTextReplacementResult(
                 replacement.Order,
                 replacement.OldValue,
                 replacement.NewValue,
-                found,
-                found));
+                foundCount,
+                appliedCount));
         }
 
-        using var document = new Document(pdfDoc);
-        document.SetMargins(36, 36, 36, 36);
-
-        for (var i = 1; i <= pageCount; i++)
-        {
-            var page = pdfDoc.GetPage(i);
-            var pageSize = page.GetPageSize();
-            var canvas = new PdfCanvas(page.NewContentStreamAfter(), page.GetResources(), pdfDoc);
-
-            canvas.SaveState();
-            canvas.SetFillColorRgb(1, 1, 1);
-            canvas.Rectangle(
-                pageSize.GetLeft(),
-                pageSize.GetBottom(),
-                pageSize.GetWidth(),
-                pageSize.GetHeight());
-            canvas.Fill();
-            canvas.RestoreState();
-
-            document.ShowTextAligned(
-                new Paragraph(FitText(workingText[i]))
-                    .SetFont(font)
-                    .SetFontSize(MinFontSize)
-                    .SetMultipliedLeading(1.1f),
-                pageSize.GetLeft() + 36,
-                pageSize.GetTop() - 36,
-                i,
-                TextAlignment.LEFT,
-                VerticalAlignment.TOP,
-                0);
-        }
-
-        var totalFound = results.Sum(x => x.FoundCount);
-        var totalApplied = results.Sum(x => x.AppliedCount);
-
-        return new PdfTextReplaceSummary(results, totalFound, totalApplied);
+        return new PdfTextReplaceSummary(
+            results,
+            results.Sum(x => x.FoundCount),
+            results.Sum(x => x.AppliedCount));
     }
 
     private static PdfFont CreateUnicodeFont()
@@ -120,36 +113,107 @@ public class PdfTextReplaceService : IPdfTextReplaceService
         return PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
     }
 
-    private static int CountOccurrences(string input, string search)
+    private static List<PageTextModel> ExtractPageModels(PdfDocument pdfDoc)
     {
-        if (string.IsNullOrEmpty(input) || string.IsNullOrEmpty(search))
+        var pages = new List<PageTextModel>();
+        for (var i = 1; i <= pdfDoc.GetNumberOfPages(); i++)
         {
-            return 0;
+            var listener = new TextFragmentListener();
+            var processor = new PdfCanvasProcessor(listener);
+            processor.ProcessPageContent(pdfDoc.GetPage(i));
+
+            var groups = BuildGroups(listener.Fragments);
+            pages.Add(new PageTextModel(i, groups));
         }
 
-        var count = 0;
-        var index = 0;
+        return pages;
+    }
 
-        while ((index = input.IndexOf(search, index, StringComparison.Ordinal)) >= 0)
+    private static List<TextGroup> BuildGroups(List<TextFragment> fragments)
+    {
+        var lines = new List<List<TextFragment>>();
+
+        foreach (var fragment in fragments.OrderByDescending(x => x.BaselineY).ThenBy(x => x.Bounds.GetX()))
         {
-            count++;
+            var line = lines.FirstOrDefault(x => Math.Abs(x[0].BaselineY - fragment.BaselineY) <= LineGroupTolerance);
+            if (line is null)
+            {
+                lines.Add(new List<TextFragment> { fragment });
+                continue;
+            }
+
+            line.Add(fragment);
+        }
+
+        var groups = new List<TextGroup>(lines.Count);
+        foreach (var line in lines)
+        {
+            var ordered = line.OrderBy(x => x.Bounds.GetX()).ToList();
+            groups.Add(TextGroup.Create(ordered));
+        }
+
+        return groups;
+    }
+
+    private static void PaintWhiteRectangle(PdfCanvas canvas, Rectangle area)
+    {
+        canvas.SaveState();
+        canvas.SetFillColor(ColorConstants.WHITE);
+        canvas.Rectangle(
+            area.GetX() - WhiteoutPadding,
+            area.GetY() - WhiteoutPadding,
+            area.GetWidth() + WhiteoutPadding * 2,
+            area.GetHeight() + WhiteoutPadding * 2);
+        canvas.Fill();
+        canvas.RestoreState();
+    }
+
+    private static void DrawReplacementText(PdfCanvas canvas, PdfFont font, string text, Rectangle area, List<TextFragment> originalFragments)
+    {
+        var estimatedSize = originalFragments.Average(x => x.FontSize);
+        var targetSize = Math.Max(MinFontSize, estimatedSize * MaxFontScale);
+
+        targetSize = FitText(font, text, targetSize, area.GetWidth() - 2);
+        var baseline = area.GetY() + Math.Max(targetSize, area.GetHeight()) * 0.15f;
+
+        canvas.BeginText();
+        canvas.SetFillColor(ColorConstants.BLACK);
+        canvas.SetFontAndSize(font, targetSize);
+        canvas.MoveText(area.GetX(), baseline);
+        canvas.ShowText(text);
+        canvas.EndText();
+    }
+
+    private static float FitText(PdfFont font, string value, float initialSize, float maxWidth)
+    {
+        var size = initialSize;
+        while (size > MinFontSize && font.GetWidth(value, size) > maxWidth)
+        {
+            size -= 0.2f;
+        }
+
+        return Math.Max(MinFontSize, size);
+    }
+
+    private static List<TextMatch> FindMatches(string text, string search)
+    {
+        var matches = new List<TextMatch>();
+        if (string.IsNullOrEmpty(text) || string.IsNullOrEmpty(search))
+        {
+            return matches;
+        }
+
+        var index = 0;
+        while ((index = text.IndexOf(search, index, StringComparison.Ordinal)) >= 0)
+        {
+            matches.Add(new TextMatch(index, search.Length));
             index += search.Length;
         }
 
-        return count;
+        return matches;
     }
 
-    private static string FitText(string value)
-    {
-        if (string.IsNullOrEmpty(value))
-        {
-            return value;
-        }
-
-        return value.Length <= 16000
-            ? value
-            : value[..15997] + "...";
-    }
+    private static int CountOccurrences(string input, string search) => FindMatches(input, search).Count;
 
     private static string NormalizeExtractedText(string value)
     {
@@ -178,4 +242,97 @@ public class PdfTextReplaceService : IPdfTextReplaceService
 
         return value.Count(ch => ch is >= '\u0400' and <= '\u04FF');
     }
+
+    private static Rectangle UnionBounds(IEnumerable<Rectangle> rectangles)
+    {
+        var rects = rectangles.ToList();
+        var left = rects.Min(x => x.GetX());
+        var bottom = rects.Min(x => x.GetY());
+        var right = rects.Max(x => x.GetX() + x.GetWidth());
+        var top = rects.Max(x => x.GetY() + x.GetHeight());
+
+        return new Rectangle(left, bottom, right - left, top - bottom);
+    }
+
+    private sealed class TextFragmentListener : IEventListener
+    {
+        public List<TextFragment> Fragments { get; } = new();
+
+        public void EventOccurred(IEventData data, EventType type)
+        {
+            if (type != EventType.RENDER_TEXT || data is not TextRenderInfo tri)
+            {
+                return;
+            }
+
+            var text = tri.GetText();
+            if (string.IsNullOrEmpty(text))
+            {
+                return;
+            }
+
+            var ascent = tri.GetAscentLine().GetBoundingRectangle();
+            var descent = tri.GetDescentLine().GetBoundingRectangle();
+            var bounds = UnionBounds(new[] { ascent, descent });
+            var normalized = NormalizeExtractedText(text);
+
+            Fragments.Add(new TextFragment(
+                text,
+                normalized,
+                bounds,
+                tri.GetBaseline().GetStartPoint().Get(1),
+                tri.GetFontSize()));
+        }
+
+        public ICollection<EventType> GetSupportedEvents() => new HashSet<EventType> { EventType.RENDER_TEXT };
+    }
+
+    private sealed record TextFragment(string RawText, string NormalizedText, Rectangle Bounds, float BaselineY, float FontSize)
+    {
+        public int StartIndex { get; init; }
+    }
+
+    private sealed class TextGroup
+    {
+        public string NormalizedText { get; }
+        public IReadOnlyList<TextFragment> Fragments { get; }
+
+        private TextGroup(string normalizedText, IReadOnlyList<TextFragment> fragments)
+        {
+            NormalizedText = normalizedText;
+            Fragments = fragments;
+        }
+
+        public static TextGroup Create(List<TextFragment> fragments)
+        {
+            var list = new List<TextFragment>(fragments.Count);
+            var sb = new StringBuilder();
+            var index = 0;
+
+            foreach (var fragment in fragments)
+            {
+                list.Add(fragment with { StartIndex = index });
+                sb.Append(fragment.NormalizedText);
+                index += fragment.NormalizedText.Length;
+            }
+
+            return new TextGroup(sb.ToString(), list);
+        }
+
+        public List<TextFragment> GetFragmentsInRange(int start, int length)
+        {
+            var end = start + length;
+            return Fragments
+                .Where(fragment =>
+                {
+                    var fragmentStart = fragment.StartIndex;
+                    var fragmentEnd = fragment.StartIndex + fragment.NormalizedText.Length;
+                    return fragmentEnd > start && fragmentStart < end;
+                })
+                .ToList();
+        }
+    }
+
+    private sealed record PageTextModel(int PageNumber, List<TextGroup> Groups);
+    private sealed record TextMatch(int Start, int Length);
 }
