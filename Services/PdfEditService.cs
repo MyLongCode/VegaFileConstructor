@@ -61,12 +61,11 @@ public class PdfEditService(
     public async Task<PdfEditOperation> SaveReplacementsAsync(string userId, Guid operationId, IReadOnlyList<PdfEditReplacementRowViewModel> rows)
     {
         var operation = await db.PdfEditOperations
-            .Include(x => x.Replacements)
             .FirstOrDefaultAsync(x => x.Id == operationId && x.UserId == userId)
             ?? throw new InvalidOperationException("Операция не найдена");
 
         var filtered = rows
-            .Select((x, idx) => new { Row = x, Index = idx + 1 })
+            .Select((x, idx) => new { Row = x, Order = idx + 1 })
             .Where(x => !string.IsNullOrWhiteSpace(x.Row.OldValue) || !string.IsNullOrWhiteSpace(x.Row.NewValue))
             .ToList();
 
@@ -83,18 +82,34 @@ public class PdfEditService(
                 throw new InvalidOperationException("Длина поля замены не должна превышать 500 символов");
         }
 
-        db.PdfEditReplacements.RemoveRange(operation.Replacements);
-        operation.Replacements = filtered.Select(x => new PdfEditReplacement
+        var existingRows = await db.PdfEditReplacements
+            .Where(x => x.OperationId == operation.Id)
+            .ToListAsync();
+        if (existingRows.Count > 0)
+        {
+            db.PdfEditReplacements.RemoveRange(existingRows);
+            await db.SaveChangesAsync();
+        }
+
+        var newRows = filtered.Select(x => new PdfEditReplacement
         {
             OperationId = operation.Id,
-            Order = x.Index,
+            Order = x.Order,
             OldValue = x.Row.OldValue!.Trim(),
             NewValue = x.Row.NewValue!.Trim()
         }).ToList();
-        operation.TotalRequestedReplacements = operation.Replacements.Count;
+
+        db.PdfEditReplacements.AddRange(newRows);
+        operation.TotalRequestedReplacements = newRows.Count;
+        operation.TotalFoundOccurrences = 0;
+        operation.TotalAppliedReplacements = 0;
+        operation.Status = PdfEditStatus.Uploaded;
+        operation.ErrorMessage = null;
         operation.UpdatedAt = DateTime.UtcNow;
 
         await db.SaveChangesAsync();
+
+        operation.Replacements = newRows;
         return operation;
     }
 

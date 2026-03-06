@@ -1,6 +1,7 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.EntityFrameworkCore;
 using VegaFileConstructor.Models;
 using VegaFileConstructor.Services;
 using VegaFileConstructor.ViewModels;
@@ -76,6 +77,11 @@ public class PdfEditController(IPdfEditService pdfEditService, IWebHostEnvironme
             var op = await pdfEditService.SaveReplacementsAsync(userId, vm.OperationId.Value, vm.Replacements);
             var refreshed = await pdfEditService.GetByIdAsync(userId, op.Id);
             return View(refreshed);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            ModelState.AddModelError(string.Empty, "Данные операции изменились. Пожалуйста, откройте шаг заново.");
+            return RedirectToAction(nameof(Edit), new { id = vm.OperationId.Value });
         }
         catch (InvalidOperationException ex)
         {
