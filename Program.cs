@@ -21,6 +21,8 @@ builder.Services.AddDefaultIdentity<IdentityUser>(options =>
 builder.Services.AddControllersWithViews();
 builder.Services.AddScoped<IPdfGeneratorService, PdfGeneratorService>();
 builder.Services.AddScoped<IGenerationWorkflowService, GenerationWorkflowService>();
+builder.Services.AddScoped<IPdfEditService, PdfEditService>();
+builder.Services.AddScoped<IPdfTextReplaceService, PdfTextReplaceService>();
 
 var app = builder.Build();
 

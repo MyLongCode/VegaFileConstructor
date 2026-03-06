@@ -13,6 +13,7 @@
         <div class="navbar-nav me-auto">
             <a class="nav-link" asp-controller="DocumentWizard" asp-action="Step1">Создать документ</a>
             <a class="nav-link" asp-controller="Generations" asp-action="Index">История</a>
+            <a class="nav-link" asp-controller="PdfEdit" asp-action="Index">Редактирование PDF</a>
         </div>
         <div>
             @if (User.Identity?.IsAuthenticated == true)

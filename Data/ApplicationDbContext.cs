@@ -11,6 +11,8 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
     public DbSet<TemplateFieldPlacement> TemplateFieldPlacements => Set<TemplateFieldPlacement>();
     public DbSet<Generation> Generations => Set<Generation>();
     public DbSet<GenerationFieldValue> GenerationFieldValues => Set<GenerationFieldValue>();
+    public DbSet<PdfEditOperation> PdfEditOperations => Set<PdfEditOperation>();
+    public DbSet<PdfEditReplacement> PdfEditReplacements => Set<PdfEditReplacement>();
 
     protected override void OnModelCreating(ModelBuilder builder)
     {
@@ -26,5 +28,17 @@ public class ApplicationDbContext(DbContextOptions<ApplicationDbContext> options
 
         builder.Entity<TemplateFieldPlacement>()
             .HasIndex(x => new { x.TemplateId, x.FieldKey });
+
+        builder.Entity<PdfEditOperation>()
+            .HasIndex(x => new { x.UserId, x.CreatedAt });
+
+        builder.Entity<PdfEditReplacement>()
+            .HasIndex(x => new { x.OperationId, x.Order });
+
+        builder.Entity<PdfEditReplacement>()
+            .HasOne(x => x.Operation)
+            .WithMany(x => x.Replacements)
+            .HasForeignKey(x => x.OperationId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
