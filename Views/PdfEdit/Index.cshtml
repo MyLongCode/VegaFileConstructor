@@ -1,0 +1,16 @@
+@model VegaFileConstructor.ViewModels.PdfEditUploadViewModel
+
+<h2>Шаг 1 из 3. Загрузка PDF</h2>
+<div class="progress mb-3"><div class="progress-bar" style="width:33%"></div></div>
+
+<form asp-action="Upload" method="post" enctype="multipart/form-data" class="card card-body">
+    <div class="mb-3">
+        <label asp-for="File" class="form-label">Выберите PDF</label>
+        <input asp-for="File" class="form-control" accept=".pdf,application/pdf" />
+        <div class="form-text">Только .pdf, размер до 20 MB.</div>
+        <span asp-validation-for="File" class="text-danger"></span>
+    </div>
+    <div>
+        <button class="btn btn-primary">Далее</button>
+    </div>
+</form>

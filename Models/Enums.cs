@@ -20,3 +20,11 @@ public enum GenerationStatus
     Generated = 1,
     Failed = 2
 }
+
+public enum PdfEditStatus
+{
+    Uploaded = 0,
+    Processing = 1,
+    Completed = 2,
+    Failed = 3
+}

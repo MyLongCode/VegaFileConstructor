@@ -1,0 +1,33 @@
+@model VegaFileConstructor.ViewModels.PdfEditResultViewModel
+
+<h2>Файл готов</h2>
+
+@if (Model.Status == VegaFileConstructor.Models.PdfEditStatus.Failed)
+{
+    <div class="alert alert-danger">Не удалось обработать PDF. Попробуйте другой файл. @Model.ErrorMessage</div>
+}
+else
+{
+    <div class="alert alert-success">Операция завершена успешно.</div>
+    @if (Model.NotFoundRows.Any())
+    {
+        <div class="alert alert-warning">Не найдены строки: @string.Join(", ", Model.NotFoundRows)</div>
+    }
+}
+
+<div class="card card-body mb-3">
+    <p><strong>Исходный файл:</strong> @Model.OriginalFileName</p>
+    <p><strong>Выходной файл:</strong> @Model.OutputFileName</p>
+    <p>Задано строк: @Model.TotalRequestedReplacements</p>
+    <p>Найдено совпадений: @Model.TotalFoundOccurrences</p>
+    <p>Применено замен: @Model.TotalAppliedReplacements</p>
+</div>
+
+<div class="d-flex gap-2">
+    @if (Model.Status == VegaFileConstructor.Models.PdfEditStatus.Completed)
+    {
+        <a asp-action="Download" asp-route-id="@Model.OperationId" class="btn btn-primary btn-lg">Скачать PDF</a>
+    }
+    <a asp-action="Index" class="btn btn-outline-secondary">Редактировать ещё</a>
+    <a asp-action="History" class="btn btn-outline-secondary">Перейти в историю</a>
+</div>

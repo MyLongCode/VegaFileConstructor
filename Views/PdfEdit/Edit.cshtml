@@ -1,0 +1,64 @@
+@model VegaFileConstructor.ViewModels.PdfEditWizardViewModel
+
+<h2>Шаг 2 из 3. Какие строки заменить</h2>
+<div class="progress mb-3"><div class="progress-bar" style="width:66%"></div></div>
+
+<div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
+
+<form asp-action="Confirm" method="post">
+    <input type="hidden" asp-for="OperationId" />
+    <input type="hidden" asp-for="OriginalFileName" />
+
+    <div class="card card-body mb-3">
+        <div class="d-flex justify-content-between mb-2">
+            <strong>Файл: @Model.OriginalFileName</strong>
+            <button type="button" class="btn btn-outline-secondary btn-sm" onclick="clearRows()">Очистить форму</button>
+        </div>
+
+        <table class="table table-sm align-middle">
+            <thead><tr><th>Что заменить (OldValue)</th><th>На что заменить (NewValue)</th><th></th></tr></thead>
+            <tbody id="rows">
+            @for (var i = 0; i < Model.Replacements.Count; i++)
+            {
+                <tr>
+                    <td><input asp-for="Replacements[i].OldValue" class="form-control" maxlength="500" /></td>
+                    <td><input asp-for="Replacements[i].NewValue" class="form-control" maxlength="500" /></td>
+                    <td><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()">Удалить</button></td>
+                </tr>
+            }
+            </tbody>
+        </table>
+
+        <div class="d-flex gap-2">
+            <button type="button" class="btn btn-outline-primary" onclick="addRow()">Добавить строку</button>
+            <a asp-action="Index" class="btn btn-outline-secondary">Назад</a>
+            <button class="btn btn-primary">Далее</button>
+        </div>
+    </div>
+</form>
+
+<div class="card card-body">
+    <h5>Предпросмотр изменений</h5>
+    <div>Имя файла: <strong>@Model.OriginalFileName</strong></div>
+    <div>Количество строк замены: <strong>@Model.Replacements.Count</strong></div>
+</div>
+
+@section Scripts {
+<script>
+function clearRows(){
+    const tbody=document.getElementById('rows');
+    tbody.innerHTML='';
+    addRow();
+}
+
+function addRow() {
+    const tbody = document.getElementById('rows');
+    const index = tbody.querySelectorAll('tr').length;
+    const tr = document.createElement('tr');
+    tr.innerHTML = `<td><input class="form-control" maxlength="500" name="Replacements[${index}].OldValue" /></td>
+                    <td><input class="form-control" maxlength="500" name="Replacements[${index}].NewValue" /></td>
+                    <td><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()">Удалить</button></td>`;
+    tbody.appendChild(tr);
+}
+</script>
+}
