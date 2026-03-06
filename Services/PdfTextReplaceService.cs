@@ -1,3 +1,6 @@
+using iText.IO.Font;
+using iText.IO.Font.Constants;
+using iText.Kernel.Font;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas;
 using iText.Layout;
@@ -10,6 +13,8 @@ namespace VegaFileConstructor.Services;
 public class PdfTextReplaceService : IPdfTextReplaceService
 {
     private const float MinFontSize = 8f;
+    private const string DefaultFontPath = @"C:\Windows\Fonts\arial.ttf";
+
     private static readonly Encoding Latin1Encoding = Encoding.Latin1;
     private static readonly Encoding Cp1251Encoding;
 
@@ -19,39 +24,58 @@ public class PdfTextReplaceService : IPdfTextReplaceService
         Cp1251Encoding = Encoding.GetEncoding(1251);
     }
 
-    public async Task<PdfTextReplaceSummary> ReplaceTextAsync(string sourcePath, string outputPath, IReadOnlyList<PdfTextReplacementInput> replacements)
+    public async Task<PdfTextReplaceSummary> ReplaceTextAsync(
+        string sourcePath,
+        string outputPath,
+        IReadOnlyList<PdfTextReplacementInput> replacements)
     {
         Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
 
         await using var input = File.OpenRead(sourcePath);
         await using var output = File.Create(outputPath);
+
         using var pdfReader = new PdfReader(input);
         using var pdfWriter = new PdfWriter(output);
         using var pdfDoc = new PdfDocument(pdfReader, pdfWriter);
 
+        var font = CreateUnicodeFont();
+        var pageCount = pdfDoc.GetNumberOfPages();
+
         var workingText = new Dictionary<int, string>();
         var results = new List<PdfTextReplacementResult>();
 
-        for (var i = 1; i <= pdfDoc.GetNumberOfPages(); i++)
+        for (var i = 1; i <= pageCount; i++)
         {
             var page = pdfDoc.GetPage(i);
-            var text = iText.Kernel.Pdf.Canvas.Parser.PdfTextExtractor.GetTextFromPage(page);
-            workingText[i] = NormalizeExtractedText(text);
+            var extractedText = iText.Kernel.Pdf.Canvas.Parser.PdfTextExtractor.GetTextFromPage(page);
+            workingText[i] = NormalizeExtractedText(extractedText);
         }
 
         foreach (var replacement in replacements.OrderBy(x => x.Order))
         {
             var found = 0;
+
             foreach (var pageNum in workingText.Keys.ToList())
             {
                 found += CountOccurrences(workingText[pageNum], replacement.OldValue);
-                workingText[pageNum] = workingText[pageNum].Replace(replacement.OldValue, replacement.NewValue, StringComparison.Ordinal);
+                workingText[pageNum] = workingText[pageNum].Replace(
+                    replacement.OldValue,
+                    replacement.NewValue,
+                    StringComparison.Ordinal);
             }
 
-            results.Add(new PdfTextReplacementResult(replacement.Order, replacement.OldValue, replacement.NewValue, found, found));
+            results.Add(new PdfTextReplacementResult(
+                replacement.Order,
+                replacement.OldValue,
+                replacement.NewValue,
+                found,
+                found));
         }
 
-        for (var i = 1; i <= pdfDoc.GetNumberOfPages(); i++)
+        using var document = new Document(pdfDoc);
+        document.SetMargins(36, 36, 36, 36);
+
+        for (var i = 1; i <= pageCount; i++)
         {
             var page = pdfDoc.GetPage(i);
             var pageSize = page.GetPageSize();
@@ -59,14 +83,17 @@ public class PdfTextReplaceService : IPdfTextReplaceService
 
             canvas.SaveState();
             canvas.SetFillColorRgb(1, 1, 1);
-            canvas.Rectangle(pageSize.GetLeft(), pageSize.GetBottom(), pageSize.GetWidth(), pageSize.GetHeight());
+            canvas.Rectangle(
+                pageSize.GetLeft(),
+                pageSize.GetBottom(),
+                pageSize.GetWidth(),
+                pageSize.GetHeight());
             canvas.Fill();
             canvas.RestoreState();
 
-            using var document = new Document(pdfDoc);
-            document.SetMargins(36, 36, 36, 36);
             document.ShowTextAligned(
                 new Paragraph(FitText(workingText[i]))
+                    .SetFont(font)
                     .SetFontSize(MinFontSize)
                     .SetMultipliedLeading(1.1f),
                 pageSize.GetLeft() + 36,
@@ -79,14 +106,30 @@ public class PdfTextReplaceService : IPdfTextReplaceService
 
         var totalFound = results.Sum(x => x.FoundCount);
         var totalApplied = results.Sum(x => x.AppliedCount);
+
         return new PdfTextReplaceSummary(results, totalFound, totalApplied);
+    }
+
+    private static PdfFont CreateUnicodeFont()
+    {
+        if (File.Exists(DefaultFontPath))
+        {
+            return PdfFontFactory.CreateFont(DefaultFontPath, PdfEncodings.IDENTITY_H);
+        }
+
+        return PdfFontFactory.CreateFont(StandardFonts.HELVETICA);
     }
 
     private static int CountOccurrences(string input, string search)
     {
-        if (string.IsNullOrEmpty(input) || string.IsNullOrEmpty(search)) return 0;
+        if (string.IsNullOrEmpty(input) || string.IsNullOrEmpty(search))
+        {
+            return 0;
+        }
+
         var count = 0;
         var index = 0;
+
         while ((index = input.IndexOf(search, index, StringComparison.Ordinal)) >= 0)
         {
             count++;
@@ -98,7 +141,14 @@ public class PdfTextReplaceService : IPdfTextReplaceService
 
     private static string FitText(string value)
     {
-        return value.Length <= 16000 ? value : value[..15997] + "...";
+        if (string.IsNullOrEmpty(value))
+        {
+            return value;
+        }
+
+        return value.Length <= 16000
+            ? value
+            : value[..15997] + "...";
     }
 
     private static string NormalizeExtractedText(string value)
@@ -121,6 +171,11 @@ public class PdfTextReplaceService : IPdfTextReplaceService
 
     private static int CountCyrillicLetters(string value)
     {
+        if (string.IsNullOrEmpty(value))
+        {
+            return 0;
+        }
+
         return value.Count(ch => ch is >= '\u0400' and <= '\u04FF');
     }
 }
