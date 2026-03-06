@@ -1,0 +1,21 @@
+@model VegaFileConstructor.Models.PdfEditOperation
+
+<h2>Шаг 3 из 3. Подтверждение</h2>
+<div class="progress mb-3"><div class="progress-bar" style="width:100%"></div></div>
+
+<div class="card card-body mb-3">
+    <p><strong>Исходный файл:</strong> @Model.OriginalFileName</p>
+    <p class="text-warning">Модуль работает только с текстовым содержимым PDF. Если строка не найдена, замена не будет выполнена.</p>
+    <ul>
+        @foreach (var row in Model.Replacements.OrderBy(x => x.Order))
+        {
+            <li>"@row.OldValue" → "@row.NewValue"</li>
+        }
+    </ul>
+    <div class="d-flex gap-2">
+        <a asp-action="Edit" asp-route-id="@Model.Id" class="btn btn-outline-secondary">Назад</a>
+        <form asp-action="Process" asp-route-id="@Model.Id" method="post">
+            <button class="btn btn-primary">Применить изменения</button>
+        </form>
+    </div>
+</div>
