@@ -1,0 +1,39 @@
+@model VegaFileConstructor.ViewModels.PdfEditHistoryViewModel
+
+<h2>История редактирования PDF</h2>
+
+<form method="get" class="row g-2 mb-3">
+    <div class="col-md-3"><input asp-for="FileName" class="form-control" placeholder="Имя файла" /></div>
+    <div class="col-md-2"><input asp-for="DateFrom" class="form-control" /></div>
+    <div class="col-md-2"><input asp-for="DateTo" class="form-control" /></div>
+    <div class="col-md-2">
+        <select asp-for="Status" class="form-select" asp-items="Html.GetEnumSelectList<VegaFileConstructor.Models.PdfEditStatus>()">
+            <option value="">Все статусы</option>
+        </select>
+    </div>
+    <div class="col-md-2"><button class="btn btn-primary">Фильтр</button></div>
+</form>
+
+<table class="table table-striped">
+    <thead><tr><th>Дата/время</th><th>Исходный файл</th><th>Статус</th><th>Кол-во замен</th><th>Найдено</th><th>Применено</th><th></th></tr></thead>
+    <tbody>
+    @foreach (var item in Model.Items)
+    {
+        <tr>
+            <td>@item.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+            <td>@item.OriginalFileName</td>
+            <td>@item.Status</td>
+            <td>@item.TotalRequestedReplacements</td>
+            <td>@item.TotalFoundOccurrences</td>
+            <td>@item.TotalAppliedReplacements</td>
+            <td>
+                <a asp-action="Details" asp-route-id="@item.Id" class="btn btn-sm btn-outline-secondary">Details</a>
+                @if (item.Status == VegaFileConstructor.Models.PdfEditStatus.Completed)
+                {
+                    <a asp-action="Download" asp-route-id="@item.Id" class="btn btn-sm btn-primary">Download</a>
+                }
+            </td>
+        </tr>
+    }
+    </tbody>
+</table>

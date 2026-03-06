@@ -1,0 +1,29 @@
+@model VegaFileConstructor.Models.PdfEditOperation
+
+<h2>Детали операции</h2>
+
+<div class="card card-body mb-3">
+    <p><strong>Исходное имя файла:</strong> @Model.OriginalFileName</p>
+    <p><strong>Дата создания:</strong> @Model.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</p>
+    <p><strong>Статус:</strong> @Model.Status</p>
+
+    @if (Model.Status == VegaFileConstructor.Models.PdfEditStatus.Failed && !string.IsNullOrWhiteSpace(Model.ErrorMessage))
+    {
+        <div class="alert alert-danger">@Model.ErrorMessage</div>
+    }
+
+    <table class="table table-sm">
+        <thead><tr><th>OldValue</th><th>NewValue</th><th>FoundCount</th><th>AppliedCount</th></tr></thead>
+        <tbody>
+        @foreach (var row in Model.Replacements.OrderBy(x => x.Order))
+        {
+            <tr><td>@row.OldValue</td><td>@row.NewValue</td><td>@row.FoundCount</td><td>@row.AppliedCount</td></tr>
+        }
+        </tbody>
+    </table>
+
+    @if (Model.Status == VegaFileConstructor.Models.PdfEditStatus.Completed)
+    {
+        <a asp-action="Download" asp-route-id="@Model.Id" class="btn btn-primary">Download</a>
+    }
+</div>
