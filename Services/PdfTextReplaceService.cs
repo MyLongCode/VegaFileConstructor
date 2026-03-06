@@ -3,12 +3,21 @@ using iText.Kernel.Pdf.Canvas;
 using iText.Layout;
 using iText.Layout.Element;
 using iText.Layout.Properties;
+using System.Text;
 
 namespace VegaFileConstructor.Services;
 
 public class PdfTextReplaceService : IPdfTextReplaceService
 {
     private const float MinFontSize = 8f;
+    private static readonly Encoding Latin1Encoding = Encoding.Latin1;
+    private static readonly Encoding Cp1251Encoding;
+
+    static PdfTextReplaceService()
+    {
+        Encoding.RegisterProvider(CodePagesEncodingProvider.Instance);
+        Cp1251Encoding = Encoding.GetEncoding(1251);
+    }
 
     public async Task<PdfTextReplaceSummary> ReplaceTextAsync(string sourcePath, string outputPath, IReadOnlyList<PdfTextReplacementInput> replacements)
     {
@@ -27,7 +36,7 @@ public class PdfTextReplaceService : IPdfTextReplaceService
         {
             var page = pdfDoc.GetPage(i);
             var text = iText.Kernel.Pdf.Canvas.Parser.PdfTextExtractor.GetTextFromPage(page);
-            workingText[i] = text;
+            workingText[i] = NormalizeExtractedText(text);
         }
 
         foreach (var replacement in replacements.OrderBy(x => x.Order))
@@ -90,5 +99,28 @@ public class PdfTextReplaceService : IPdfTextReplaceService
     private static string FitText(string value)
     {
         return value.Length <= 16000 ? value : value[..15997] + "...";
+    }
+
+    private static string NormalizeExtractedText(string value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return value;
+        }
+
+        var decoded = Cp1251Encoding.GetString(Latin1Encoding.GetBytes(value));
+
+        var originalCyrillic = CountCyrillicLetters(value);
+        var decodedCyrillic = CountCyrillicLetters(decoded);
+        var originalLatin1Supplement = value.Count(ch => ch is >= '\u00C0' and <= '\u00FF');
+
+        return decodedCyrillic > originalCyrillic && originalLatin1Supplement > 0
+            ? decoded
+            : value;
+    }
+
+    private static int CountCyrillicLetters(string value)
+    {
+        return value.Count(ch => ch is >= '\u0400' and <= '\u04FF');
     }
 }
