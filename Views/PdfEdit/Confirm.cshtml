@@ -5,11 +5,21 @@
 
 <div class="card card-body mb-3">
     <p><strong>Исходный файл:</strong> @Model.OriginalFileName</p>
-    <p class="text-warning">Модуль работает только с текстовым содержимым PDF. Если строка не найдена, замена не будет выполнена.</p>
+    <p class="text-warning">Можно заменять как текст, так и изображения. Для изображения используется текст-якорь OldValue.</p>
     <ul>
         @foreach (var row in Model.Replacements.OrderBy(x => x.Order))
         {
-            <li>"@row.OldValue" → "@row.NewValue"</li>
+            <li>
+                "@row.OldValue" →
+                @if (row.NewValue.StartsWith("img:", StringComparison.Ordinal))
+                {
+                    <span>[Изображение]</span>
+                }
+                else
+                {
+                    <span>"@row.NewValue"</span>
+                }
+            </li>
         }
     </ul>
     <div class="d-flex gap-2">

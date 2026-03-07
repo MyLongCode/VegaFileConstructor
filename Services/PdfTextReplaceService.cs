@@ -1,5 +1,6 @@
 using iText.IO.Font;
 using iText.IO.Font.Constants;
+using iText.IO.Image;
 using iText.Kernel.Colors;
 using iText.Kernel.Font;
 using iText.Kernel.Geom;
@@ -12,13 +13,14 @@ using System.Text;
 
 namespace VegaFileConstructor.Services;
 
-public class PdfTextReplaceService : IPdfTextReplaceService
+public class PdfTextReplaceService(IWebHostEnvironment env) : IPdfTextReplaceService
 {
     private const string DefaultFontPath = @"C:\Windows\Fonts\arial.ttf";
     private const float MinFontSize = 4f;
     private const float MaxFontScale = 0.98f;
     private const float LineGroupTolerance = 2.5f;
     private const float WhiteoutPadding = 0.8f;
+    private const string ImageMarker = "img:";
 
     private static readonly Encoding Latin1Encoding = Encoding.Latin1;
     private static readonly Encoding Cp1251Encoding;
@@ -83,7 +85,10 @@ public class PdfTextReplaceService : IPdfTextReplaceService
                         }
 
                         PaintWhiteRectangle(canvas, area);
-                        DrawReplacementText(canvas, replacementFont, replacement.NewValue, area, fragments);
+                        if (!TryDrawReplacementImage(canvas, replacement.NewValue, area))
+                        {
+                            DrawReplacementText(canvas, replacementFont, replacement.NewValue, area, fragments);
+                        }
                         appliedCount++;
                     }
                 }
@@ -101,6 +106,44 @@ public class PdfTextReplaceService : IPdfTextReplaceService
             results,
             results.Sum(x => x.FoundCount),
             results.Sum(x => x.AppliedCount));
+    }
+
+    private bool TryDrawReplacementImage(PdfCanvas canvas, string replacementValue, Rectangle area)
+    {
+        if (!replacementValue.StartsWith(ImageMarker, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var relativeImagePath = replacementValue[ImageMarker.Length..];
+        if (string.IsNullOrWhiteSpace(relativeImagePath) || !relativeImagePath.StartsWith('/'))
+        {
+            return false;
+        }
+
+        var imageAbsolutePath = Path.Combine(env.WebRootPath, relativeImagePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+        if (!File.Exists(imageAbsolutePath))
+        {
+            return false;
+        }
+
+        var imageData = ImageDataFactory.Create(imageAbsolutePath);
+        var imageWidth = imageData.GetWidth();
+        var imageHeight = imageData.GetHeight();
+        if (imageWidth <= 0 || imageHeight <= 0)
+        {
+            return false;
+        }
+
+        var scale = Math.Min(area.GetWidth() / imageWidth, area.GetHeight() / imageHeight);
+        var targetWidth = imageWidth * scale;
+        var targetHeight = imageHeight * scale;
+        var offsetX = area.GetX() + (area.GetWidth() - targetWidth) / 2f;
+        var offsetY = area.GetY() + (area.GetHeight() - targetHeight) / 2f;
+
+        var rect = new Rectangle(offsetX, offsetY, targetWidth, targetHeight);
+        canvas.AddImageFittedIntoRectangle(imageData, rect, false);
+        return true;
     }
 
     private static PdfFont CreateUnicodeFont()

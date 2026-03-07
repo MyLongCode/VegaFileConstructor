@@ -11,6 +11,8 @@ public class PdfEditService(
     IWebHostEnvironment env,
     IPdfTextReplaceService pdfTextReplaceService) : IPdfEditService
 {
+    private const string ImageMarker = "img:";
+
     public async Task<PdfEditOperation> CreateOperationAsync(string userId, IFormFile file, long maxSizeBytes)
     {
         if (file.Length <= 0)
@@ -66,7 +68,7 @@ public class PdfEditService(
 
         var filtered = rows
             .Select((x, idx) => new { Row = x, Order = idx + 1 })
-            .Where(x => !string.IsNullOrWhiteSpace(x.Row.OldValue) || !string.IsNullOrWhiteSpace(x.Row.NewValue))
+            .Where(x => !string.IsNullOrWhiteSpace(x.Row.OldValue) || !string.IsNullOrWhiteSpace(x.Row.NewValue) || x.Row.UseImage || x.Row.NewImageFile is not null)
             .ToList();
 
         if (filtered.Count == 0)
@@ -74,12 +76,41 @@ public class PdfEditService(
             throw new InvalidOperationException("Добавьте хотя бы одну строку для замены");
         }
 
+        var preparedRows = new List<PdfEditReplacement>();
         foreach (var item in filtered)
         {
-            if (string.IsNullOrWhiteSpace(item.Row.OldValue) || string.IsNullOrWhiteSpace(item.Row.NewValue))
-                throw new InvalidOperationException("OldValue и NewValue обязательны для каждой заполненной строки");
-            if (item.Row.OldValue.Length > 500 || item.Row.NewValue.Length > 500)
+            var oldValue = item.Row.OldValue?.Trim();
+            if (string.IsNullOrWhiteSpace(oldValue))
+            {
+                throw new InvalidOperationException("OldValue обязательно для каждой заполненной строки");
+            }
+
+            if (item.Row.UseImage)
+            {
+                var imagePath = await ResolveImagePathAsync(userId, operationId, item.Order, item.Row);
+                preparedRows.Add(new PdfEditReplacement
+                {
+                    OperationId = operation.Id,
+                    Order = item.Order,
+                    OldValue = oldValue,
+                    NewValue = $"{ImageMarker}{imagePath}"
+                });
+                continue;
+            }
+
+            var newValue = item.Row.NewValue?.Trim();
+            if (string.IsNullOrWhiteSpace(newValue))
+                throw new InvalidOperationException("NewValue обязателен для текстовой замены");
+            if (oldValue.Length > 500 || newValue.Length > 500)
                 throw new InvalidOperationException("Длина поля замены не должна превышать 500 символов");
+
+            preparedRows.Add(new PdfEditReplacement
+            {
+                OperationId = operation.Id,
+                Order = item.Order,
+                OldValue = oldValue,
+                NewValue = newValue
+            });
         }
 
         var existingRows = await db.PdfEditReplacements
@@ -91,16 +122,8 @@ public class PdfEditService(
             await db.SaveChangesAsync();
         }
 
-        var newRows = filtered.Select(x => new PdfEditReplacement
-        {
-            OperationId = operation.Id,
-            Order = x.Order,
-            OldValue = x.Row.OldValue!.Trim(),
-            NewValue = x.Row.NewValue!.Trim()
-        }).ToList();
-
-        db.PdfEditReplacements.AddRange(newRows);
-        operation.TotalRequestedReplacements = newRows.Count;
+        db.PdfEditReplacements.AddRange(preparedRows);
+        operation.TotalRequestedReplacements = preparedRows.Count;
         operation.TotalFoundOccurrences = 0;
         operation.TotalAppliedReplacements = 0;
         operation.Status = PdfEditStatus.Uploaded;
@@ -109,7 +132,7 @@ public class PdfEditService(
 
         await db.SaveChangesAsync();
 
-        operation.Replacements = newRows;
+        operation.Replacements = preparedRows;
         return operation;
     }
 
@@ -187,6 +210,40 @@ public class PdfEditService(
             query = query.Where(x => x.OriginalFileName.Contains(fileName));
 
         return await query.OrderByDescending(x => x.CreatedAt).ToListAsync();
+    }
+
+    private async Task<string> ResolveImagePathAsync(string userId, Guid operationId, int order, PdfEditReplacementRowViewModel row)
+    {
+        if (row.NewImageFile is not null && row.NewImageFile.Length > 0)
+        {
+            if (row.NewImageFile.ContentType?.StartsWith("image/", StringComparison.OrdinalIgnoreCase) != true)
+            {
+                throw new InvalidOperationException("Для замены изображением загрузите файл-картинку");
+            }
+
+            var ext = Path.GetExtension(row.NewImageFile.FileName);
+            if (string.IsNullOrWhiteSpace(ext))
+            {
+                ext = ".png";
+            }
+
+            var imagesDir = Path.Combine(env.WebRootPath, "uploads", "pdf-edit-replacements", userId, operationId.ToString());
+            Directory.CreateDirectory(imagesDir);
+            var imageName = $"r{order}_{Guid.NewGuid():N}{ext}";
+            var imageAbsPath = Path.Combine(imagesDir, imageName);
+
+            await using var stream = File.Create(imageAbsPath);
+            await row.NewImageFile.CopyToAsync(stream);
+
+            return $"/uploads/pdf-edit-replacements/{userId}/{operationId}/{imageName}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(row.ExistingImagePath))
+        {
+            return row.ExistingImagePath;
+        }
+
+        throw new InvalidOperationException("Для замены изображением нужно загрузить картинку");
     }
 
     private static string SanitizeFileName(string fileName)

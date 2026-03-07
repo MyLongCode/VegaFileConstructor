@@ -1,5 +1,7 @@
 using iText.IO.Font.Constants;
+using iText.IO.Image;
 using iText.Kernel.Font;
+using iText.Kernel.Geom;
 using iText.Kernel.Pdf;
 using iText.Kernel.Pdf.Canvas;
 using VegaFileConstructor.Models;
@@ -33,8 +35,13 @@ public class PdfGeneratorService(IWebHostEnvironment env) : IPdfGeneratorService
         foreach (var placement in placements)
         {
             if (!values.TryGetValue(placement.FieldKey, out var value)) continue;
-            value = TrimValue(value, placement.MaxWidth);
 
+            if (TryDrawImage(pdf, placement, value))
+            {
+                continue;
+            }
+
+            value = TrimValue(value, placement.MaxWidth);
             var page = pdf.GetPage(placement.Page);
             var canvas = new PdfCanvas(page);
             canvas.BeginText();
@@ -45,6 +52,31 @@ public class PdfGeneratorService(IWebHostEnvironment env) : IPdfGeneratorService
         }
 
         return Task.FromResult(outputPath);
+    }
+
+    private bool TryDrawImage(PdfDocument pdf, TemplateFieldPlacement placement, string value)
+    {
+        if (string.IsNullOrWhiteSpace(value) || !value.StartsWith('/'))
+        {
+            return false;
+        }
+
+        var relativePath = value.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+        var imagePath = Path.Combine(env.WebRootPath, relativePath);
+        if (!File.Exists(imagePath))
+        {
+            return false;
+        }
+
+        var page = pdf.GetPage(placement.Page);
+        var imageData = ImageDataFactory.Create(imagePath);
+
+        var width = placement.MaxWidth ?? 120f;
+        var ratio = imageData.GetHeight() / imageData.GetWidth();
+        var height = width * ratio;
+        var rect = new Rectangle(placement.X, placement.Y, width, height);
+        new PdfCanvas(page).AddImageFittedIntoRectangle(imageData, rect, false);
+        return true;
     }
 
     private static string TrimValue(string value, float? maxWidth)

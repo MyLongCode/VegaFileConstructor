@@ -16,6 +16,10 @@ public class PdfEditReplacementRowViewModel
 
     [MaxLength(500)]
     public string? NewValue { get; set; }
+
+    public bool UseImage { get; set; }
+    public string? ExistingImagePath { get; set; }
+    public IFormFile? NewImageFile { get; set; }
 }
 
 public class PdfEditWizardViewModel

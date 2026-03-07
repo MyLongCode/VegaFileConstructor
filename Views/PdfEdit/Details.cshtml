@@ -17,7 +17,7 @@
         <tbody>
         @foreach (var row in Model.Replacements.OrderBy(x => x.Order))
         {
-            <tr><td>@row.OldValue</td><td>@row.NewValue</td><td>@row.FoundCount</td><td>@row.AppliedCount</td></tr>
+            <tr><td>@row.OldValue</td><td>@(row.NewValue.StartsWith("img:", StringComparison.Ordinal) ? "[Изображение]" : row.NewValue)</td><td>@row.FoundCount</td><td>@row.AppliedCount</td></tr>
         }
         </tbody>
     </table>
