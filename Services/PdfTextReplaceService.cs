@@ -39,7 +39,7 @@ public class PdfTextReplaceService : IPdfTextReplaceService
             return new PdfTextReplaceSummary(Array.Empty<PdfTextReplacementResult>(), 0, 0);
         }
 
-        Directory.CreateDirectory(Path.GetDirectoryName(outputPath)!);
+        Directory.CreateDirectory(System.IO.Path.GetDirectoryName(outputPath)!);
 
         await using var input = File.OpenRead(sourcePath);
         await using var output = File.Create(outputPath);
