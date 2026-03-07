@@ -4,7 +4,8 @@ public enum TemplateDataType
 {
     Text = 0,
     Number = 1,
-    Date = 2
+    Date = 2,
+    Image = 3
 }
 
 public enum TextAlign

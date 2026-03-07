@@ -25,6 +25,7 @@ public class DynamicFieldInputVm
     public string? Value { get; set; }
 }
 
+
 public class WizardStep2Vm
 {
     public Guid TemplateId { get; set; }

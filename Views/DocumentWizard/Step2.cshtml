@@ -3,7 +3,7 @@
 <div class="progress mb-3"><div class="progress-bar" style="width:66%"></div></div>
 <div class="row">
 <div class="col-lg-8">
-<form method="post" asp-action="Step3">
+<form method="post" asp-action="Step3" enctype="multipart/form-data">
     <input type="hidden" asp-for="TemplateId" />
     <input type="hidden" asp-for="TemplateName" />
     <input type="hidden" asp-for="TemplateVersion" />
@@ -17,9 +17,22 @@
             <input type="hidden" name="Fields[@Model.Fields.IndexOf(f)].Key" value="@f.Key" />
             <input type="hidden" name="Fields[@Model.Fields.IndexOf(f)].Label" value="@f.Label" />
             <input type="hidden" name="Fields[@Model.Fields.IndexOf(f)].Group" value="@f.Group" />
+            <input type="hidden" name="Fields[@Model.Fields.IndexOf(f)].DataType" value="@f.DataType" />
             <div class="mb-3">
                 <label class="form-label">@f.Label</label>
-                <input class="form-control" name="Fields[@Model.Fields.IndexOf(f)].Value" value="@f.Value" placeholder="@f.Placeholder" type="@(f.DataType == TemplateDataType.Date ? "date" : "text")" />
+                @if (f.DataType == TemplateDataType.Image)
+                {
+                    <input type="hidden" name="Fields[@Model.Fields.IndexOf(f)].Value" value="@f.Value" />
+                    <input class="form-control" name="image_@f.Key" type="file" accept="image/*" />
+                    @if (!string.IsNullOrWhiteSpace(f.Value))
+                    {
+                        <div class="form-text">Текущее изображение уже выбрано.</div>
+                    }
+                }
+                else
+                {
+                    <input class="form-control" name="Fields[@Model.Fields.IndexOf(f)].Value" value="@f.Value" placeholder="@f.Placeholder" type="@(f.DataType == TemplateDataType.Date ? "date" : "text")" />
+                }
                 <small class="text-muted">@f.HelpText</small>
             </div>
         }

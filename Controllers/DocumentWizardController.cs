@@ -11,7 +11,7 @@ using VegaFileConstructor.ViewModels;
 namespace VegaFileConstructor.Controllers;
 
 [Authorize]
-public class DocumentWizardController(ApplicationDbContext db, IGenerationWorkflowService workflowService) : Controller
+public class DocumentWizardController(ApplicationDbContext db, IGenerationWorkflowService workflowService, IWebHostEnvironment env) : Controller
 {
     public async Task<IActionResult> Step1(string? search, bool activeOnly = true)
     {
@@ -67,6 +67,23 @@ public class DocumentWizardController(ApplicationDbContext db, IGenerationWorkfl
         {
             var def = defs.FirstOrDefault(d => d.Key == field.Key);
             if (def == null) continue;
+
+            if (def.DataType == TemplateDataType.Image)
+            {
+                var formFile = Request.Form.Files.GetFile($"image_{field.Key}");
+                if (formFile != null && formFile.Length > 0)
+                {
+                    field.Value = await SaveImageAsync(formFile);
+                }
+
+                if (def.IsRequired && string.IsNullOrWhiteSpace(field.Value))
+                {
+                    ModelState.AddModelError($"Fields[{vm.Fields.IndexOf(field)}].Value", $"Для поля '{def.Label}' нужно загрузить изображение");
+                }
+
+                continue;
+            }
+
             if (def.IsRequired && string.IsNullOrWhiteSpace(field.Value))
                 ModelState.AddModelError($"Fields[{vm.Fields.IndexOf(field)}].Value", $"Поле '{def.Label}' обязательно");
             if (def.MaxLength.HasValue && (field.Value?.Length ?? 0) > def.MaxLength.Value)
@@ -100,5 +117,25 @@ public class DocumentWizardController(ApplicationDbContext db, IGenerationWorkfl
         var generation = await workflowService.CreateAndGenerateAsync(userId, confirm.TemplateId, confirm.Values);
 
         return RedirectToAction("Details", "Generations", new { id = generation.Id });
+    }
+
+    private async Task<string> SaveImageAsync(IFormFile file)
+    {
+        var imagesDir = Path.Combine(env.WebRootPath, "uploads", "wizard-images");
+        Directory.CreateDirectory(imagesDir);
+
+        var ext = Path.GetExtension(file.FileName);
+        if (string.IsNullOrWhiteSpace(ext))
+        {
+            ext = ".png";
+        }
+
+        var fileName = $"{Guid.NewGuid()}{ext}";
+        var physicalPath = Path.Combine(imagesDir, fileName);
+
+        await using var stream = new FileStream(physicalPath, FileMode.Create);
+        await file.CopyToAsync(stream);
+
+        return $"/uploads/wizard-images/{fileName}";
     }
 }

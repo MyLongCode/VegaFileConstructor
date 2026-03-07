@@ -6,7 +6,17 @@
     <ul>
         @foreach (var item in Model.Values)
         {
-            <li><b>@item.Key:</b> @item.Value</li>
+            <li>
+                <b>@item.Key:</b>
+                @if (!string.IsNullOrWhiteSpace(item.Value) && item.Value.StartsWith("/uploads/"))
+                {
+                    <div><img src="@item.Value" style="max-width:200px;max-height:120px" alt="@item.Key" /></div>
+                }
+                else
+                {
+                    @item.Value
+                }
+            </li>
         }
     </ul>
 </div></div>
