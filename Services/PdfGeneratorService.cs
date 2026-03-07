@@ -12,8 +12,8 @@ public class PdfGeneratorService(IWebHostEnvironment env) : IPdfGeneratorService
 {
     public Task<string> GenerateAsync(DocumentTemplate template, IEnumerable<TemplateFieldPlacement> placements, Dictionary<string, string> values, string outputPath)
     {
-        var sourcePath = Path.Combine(env.WebRootPath, template.TemplateFilePath.Replace('/', Path.DirectorySeparatorChar));
-        var outputDirectory = Path.GetDirectoryName(outputPath);
+        var sourcePath = System.IO.Path.Combine(env.WebRootPath, template.TemplateFilePath.Replace('/', System.IO.Path.DirectorySeparatorChar));
+        var outputDirectory = System.IO.Path.GetDirectoryName(outputPath);
         if (string.IsNullOrWhiteSpace(outputDirectory))
         {
             throw new ArgumentException($"Output path must include a directory: {outputPath}", nameof(outputPath));
@@ -61,8 +61,8 @@ public class PdfGeneratorService(IWebHostEnvironment env) : IPdfGeneratorService
             return false;
         }
 
-        var relativePath = value.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-        var imagePath = Path.Combine(env.WebRootPath, relativePath);
+        var relativePath = value.TrimStart('/').Replace('/', System.IO.Path.DirectorySeparatorChar);
+        var imagePath = System.IO.Path.Combine(env.WebRootPath, relativePath);
         if (!File.Exists(imagePath))
         {
             return false;
