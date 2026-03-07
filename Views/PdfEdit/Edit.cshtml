@@ -1,11 +1,11 @@
 @model VegaFileConstructor.ViewModels.PdfEditWizardViewModel
 
-<h2>Шаг 2 из 3. Какие строки заменить</h2>
+<h2>Шаг 2 из 3. Что заменить</h2>
 <div class="progress mb-3"><div class="progress-bar" style="width:66%"></div></div>
 
 <div asp-validation-summary="ModelOnly" class="text-danger mb-2"></div>
 
-<form asp-action="Confirm" method="post">
+<form asp-action="Confirm" method="post" enctype="multipart/form-data">
     <input type="hidden" asp-for="OperationId" />
     <input type="hidden" asp-for="OriginalFileName" />
 
@@ -16,13 +16,31 @@
         </div>
 
         <table class="table table-sm align-middle">
-            <thead><tr><th>Что заменить (OldValue)</th><th>На что заменить (NewValue)</th><th></th></tr></thead>
+            <thead><tr><th>Что заменить (OldValue)</th><th>Тип замены</th><th>Новое значение</th><th></th></tr></thead>
             <tbody id="rows">
             @for (var i = 0; i < Model.Replacements.Count; i++)
             {
                 <tr>
                     <td><input asp-for="Replacements[i].OldValue" class="form-control" maxlength="500" /></td>
-                    <td><input asp-for="Replacements[i].NewValue" class="form-control" maxlength="500" /></td>
+                    <td>
+                        <select asp-for="Replacements[i].UseImage" class="form-select" onchange="toggleReplacementType(this)">
+                            <option value="false">Текст</option>
+                            <option value="true">Изображение</option>
+                        </select>
+                    </td>
+                    <td>
+                        <div class="text-replacement" style="display:@(Model.Replacements[i].UseImage ? "none" : "block")">
+                            <input asp-for="Replacements[i].NewValue" class="form-control" maxlength="500" />
+                        </div>
+                        <div class="image-replacement" style="display:@(Model.Replacements[i].UseImage ? "block" : "none")">
+                            <input asp-for="Replacements[i].ExistingImagePath" type="hidden" />
+                            <input asp-for="Replacements[i].NewImageFile" class="form-control" type="file" accept="image/*" />
+                            @if (!string.IsNullOrWhiteSpace(Model.Replacements[i].ExistingImagePath))
+                            {
+                                <div class="form-text">Текущее изображение уже загружено.</div>
+                            }
+                        </div>
+                    </td>
                     <td><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()">Удалить</button></td>
                 </tr>
             }
@@ -38,9 +56,9 @@
 </form>
 
 <div class="card card-body">
-    <h5>Предпросмотр изменений</h5>
-    <div>Имя файла: <strong>@Model.OriginalFileName</strong></div>
-    <div>Количество строк замены: <strong>@Model.Replacements.Count</strong></div>
+    <h5>Подсказка</h5>
+    <div>Для замены подписи или печати выберите тип <strong>Изображение</strong> и загрузите файл.</div>
+    <div>Поле <strong>OldValue</strong> — это текст-якорь, который будет найден в PDF и заменён.</div>
 </div>
 
 @section Scripts {
@@ -51,12 +69,33 @@ function clearRows(){
     addRow();
 }
 
+function toggleReplacementType(selectElement){
+    const row = selectElement.closest('tr');
+    const isImage = selectElement.value === 'true';
+    row.querySelector('.text-replacement').style.display = isImage ? 'none' : 'block';
+    row.querySelector('.image-replacement').style.display = isImage ? 'block' : 'none';
+}
+
 function addRow() {
     const tbody = document.getElementById('rows');
     const index = tbody.querySelectorAll('tr').length;
     const tr = document.createElement('tr');
     tr.innerHTML = `<td><input class="form-control" maxlength="500" name="Replacements[${index}].OldValue" /></td>
-                    <td><input class="form-control" maxlength="500" name="Replacements[${index}].NewValue" /></td>
+                    <td>
+                        <select class="form-select" name="Replacements[${index}].UseImage" onchange="toggleReplacementType(this)">
+                            <option value="false">Текст</option>
+                            <option value="true">Изображение</option>
+                        </select>
+                    </td>
+                    <td>
+                        <div class="text-replacement">
+                            <input class="form-control" maxlength="500" name="Replacements[${index}].NewValue" />
+                        </div>
+                        <div class="image-replacement" style="display:none">
+                            <input type="hidden" name="Replacements[${index}].ExistingImagePath" />
+                            <input class="form-control" type="file" accept="image/*" name="Replacements[${index}].NewImageFile" />
+                        </div>
+                    </td>
                     <td><button type="button" class="btn btn-outline-danger btn-sm" onclick="this.closest('tr').remove()">Удалить</button></td>`;
     tbody.appendChild(tr);
 }

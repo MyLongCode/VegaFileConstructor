@@ -13,6 +13,7 @@ namespace VegaFileConstructor.Controllers;
 public class PdfEditController(IPdfEditService pdfEditService, IWebHostEnvironment env) : Controller
 {
     private const long MaxFileSizeBytes = 20 * 1024 * 1024;
+    private const string ImageMarker = "img:";
 
     [HttpGet("")]
     public IActionResult Index()
@@ -54,7 +55,13 @@ public class PdfEditController(IPdfEditService pdfEditService, IWebHostEnvironme
             OriginalFileName = op.OriginalFileName,
             Replacements = op.Replacements
                 .OrderBy(x => x.Order)
-                .Select(x => new PdfEditReplacementRowViewModel { OldValue = x.OldValue, NewValue = x.NewValue })
+                .Select(x => new PdfEditReplacementRowViewModel
+                {
+                    OldValue = x.OldValue,
+                    NewValue = x.NewValue.StartsWith(ImageMarker, StringComparison.Ordinal) ? string.Empty : x.NewValue,
+                    UseImage = x.NewValue.StartsWith(ImageMarker, StringComparison.Ordinal),
+                    ExistingImagePath = x.NewValue.StartsWith(ImageMarker, StringComparison.Ordinal) ? x.NewValue[ImageMarker.Length..] : null
+                })
                 .ToList()
         };
 
@@ -122,7 +129,7 @@ public class PdfEditController(IPdfEditService pdfEditService, IWebHostEnvironme
             {
                 Order = x.Order,
                 OldValue = x.OldValue,
-                NewValue = x.NewValue,
+                NewValue = x.NewValue.StartsWith(ImageMarker, StringComparison.Ordinal) ? $"[Изображение] {x.NewValue[ImageMarker.Length..]}" : x.NewValue,
                 FoundCount = x.FoundCount,
                 AppliedCount = x.AppliedCount
             }).ToList()
