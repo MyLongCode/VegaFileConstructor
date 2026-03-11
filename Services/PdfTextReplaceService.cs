@@ -19,9 +19,12 @@ public class PdfTextReplaceService(IWebHostEnvironment env) : IPdfTextReplaceSer
     private const float MinFontSize = 4f;
     private const float MaxFontScale = 0.98f;
     private const float LineGroupTolerance = 2.5f;
-    private const float WhiteoutPadding = 0.8f;
+    private const float WhiteoutPadding = 0f;
+    private const float TextHorizontalInset = 2.2f;
     private const string ImageMarker = "img:";
     private const float SyntheticItalicAngleDegrees = 15f;
+
+    private static readonly Color ReplacementBackgroundColor = new DeviceRgb(230, 230, 230);
 
     private static readonly Encoding Latin1Encoding = Encoding.Latin1;
     private static readonly Encoding Cp1251Encoding;
@@ -85,7 +88,7 @@ public class PdfTextReplaceService(IWebHostEnvironment env) : IPdfTextReplaceSer
                             continue;
                         }
 
-                        PaintWhiteRectangle(canvas, area);
+                        PaintBackgroundRectangle(canvas, area);
                         if (!TryDrawReplacementImage(canvas, replacement.NewValue, area))
                         {
                             DrawReplacementText(canvas, replacementFont, replacement.NewValue, area, fragments);
@@ -108,7 +111,18 @@ public class PdfTextReplaceService(IWebHostEnvironment env) : IPdfTextReplaceSer
             results.Sum(x => x.FoundCount),
             results.Sum(x => x.AppliedCount));
     }
-
+    private static void PaintBackgroundRectangle(PdfCanvas canvas, Rectangle area)
+    {
+        canvas.SaveState();
+        canvas.SetFillColor(ReplacementBackgroundColor);
+        canvas.Rectangle(
+            area.GetX() - WhiteoutPadding,
+            area.GetY() - WhiteoutPadding,
+            area.GetWidth() + WhiteoutPadding * 2,
+            area.GetHeight() + WhiteoutPadding * 2);
+        canvas.Fill();
+        canvas.RestoreState();
+    }
     private bool TryDrawReplacementImage(PdfCanvas canvas, string replacementValue, Rectangle area)
     {
         if (!replacementValue.StartsWith(ImageMarker, StringComparison.Ordinal))
@@ -213,28 +227,30 @@ public class PdfTextReplaceService(IWebHostEnvironment env) : IPdfTextReplaceSer
     }
 
     private static void DrawReplacementText(
-        PdfCanvas canvas,
-        PdfFont font,
-        string text,
-        Rectangle area,
-        List<TextFragment> originalFragments)
+    PdfCanvas canvas,
+    PdfFont font,
+    string text,
+    Rectangle area,
+    List<TextFragment> originalFragments)
     {
         var estimatedSize = originalFragments.Average(x => x.FontSize);
         var targetSize = Math.Max(MinFontSize, estimatedSize * MaxFontScale);
 
         var skewX = (float)Math.Tan(SyntheticItalicAngleDegrees * Math.PI / 180d);
 
-        targetSize = FitText(font, text, targetSize, area.GetWidth() - 2, skewX);
+        var leftInset = TextHorizontalInset;
+        var rightInset = TextHorizontalInset;
 
- 
+        var availableWidth = Math.Max(1f, area.GetWidth() - leftInset - rightInset);
+        targetSize = FitText(font, text, targetSize, availableWidth, skewX);
+
         var baseline = originalFragments.Average(x => x.BaselineY);
+        var textX = area.GetX() + leftInset;
 
         canvas.BeginText();
         canvas.SetFillColor(ColorConstants.BLACK);
         canvas.SetFontAndSize(font, targetSize);
-
-        canvas.SetTextMatrix(1, 0, skewX, 1, area.GetX(), baseline);
-
+        canvas.SetTextMatrix(1, 0, skewX, 1, textX, baseline);
         canvas.ShowText(text);
         canvas.EndText();
     }
@@ -259,17 +275,6 @@ public class PdfTextReplaceService(IWebHostEnvironment env) : IPdfTextReplaceSer
                 break;
             }
 
-            size -= 0.2f;
-        }
-
-        return Math.Max(MinFontSize, size);
-    }
-
-    private static float FitText(PdfFont font, string value, float initialSize, float maxWidth)
-    {
-        var size = initialSize;
-        while (size > MinFontSize && font.GetWidth(value, size) > maxWidth)
-        {
             size -= 0.2f;
         }
 
