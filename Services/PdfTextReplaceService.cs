@@ -90,7 +90,7 @@ public class PdfTextReplaceService(IWebHostEnvironment env) : IPdfTextReplaceSer
                             continue;
                         }
 
-                        PaintBackgroundRectangle(canvas, area);
+                        PaintWhiteRectangle(canvas, area);
                         if (!TryDrawReplacementImage(canvas, replacement.NewValue, area))
                         {
                             DrawReplacementText(canvas, replacementFont, replacement.NewValue, area, fragments);
