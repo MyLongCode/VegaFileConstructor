@@ -15,12 +15,13 @@ namespace VegaFileConstructor.Services;
 
 public class PdfTextReplaceService(IWebHostEnvironment env) : IPdfTextReplaceService
 {
-    private const string DefaultFontPath = @"C:\Windows\Fonts\arial.ttf";
+    private const string DefaultFontPath = @"C:\Users\Пользователь\AppData\Local\Microsoft\Windows\Fonts\GOST.ttf";
     private const float MinFontSize = 4f;
     private const float MaxFontScale = 0.98f;
     private const float LineGroupTolerance = 2.5f;
     private const float WhiteoutPadding = 0.8f;
     private const string ImageMarker = "img:";
+    private const float SyntheticItalicAngleDegrees = 15f;
 
     private static readonly Encoding Latin1Encoding = Encoding.Latin1;
     private static readonly Encoding Cp1251Encoding;
@@ -121,7 +122,7 @@ public class PdfTextReplaceService(IWebHostEnvironment env) : IPdfTextReplaceSer
             return false;
         }
 
-        var imageAbsolutePath = Path.Combine(env.WebRootPath, relativeImagePath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar));
+        var imageAbsolutePath = System.IO.Path.Combine(env.WebRootPath, relativeImagePath.TrimStart('/').Replace('/', System.IO.Path.DirectorySeparatorChar));
         if (!File.Exists(imageAbsolutePath))
         {
             return false;
@@ -211,20 +212,57 @@ public class PdfTextReplaceService(IWebHostEnvironment env) : IPdfTextReplaceSer
         canvas.RestoreState();
     }
 
-    private static void DrawReplacementText(PdfCanvas canvas, PdfFont font, string text, Rectangle area, List<TextFragment> originalFragments)
+    private static void DrawReplacementText(
+        PdfCanvas canvas,
+        PdfFont font,
+        string text,
+        Rectangle area,
+        List<TextFragment> originalFragments)
     {
         var estimatedSize = originalFragments.Average(x => x.FontSize);
         var targetSize = Math.Max(MinFontSize, estimatedSize * MaxFontScale);
 
-        targetSize = FitText(font, text, targetSize, area.GetWidth() - 2);
-        var baseline = area.GetY() + Math.Max(targetSize, area.GetHeight()) * 0.15f;
+        var skewX = (float)Math.Tan(SyntheticItalicAngleDegrees * Math.PI / 180d);
+
+        targetSize = FitText(font, text, targetSize, area.GetWidth() - 2, skewX);
+
+ 
+        var baseline = originalFragments.Average(x => x.BaselineY);
 
         canvas.BeginText();
         canvas.SetFillColor(ColorConstants.BLACK);
         canvas.SetFontAndSize(font, targetSize);
-        canvas.MoveText(area.GetX(), baseline);
+
+        canvas.SetTextMatrix(1, 0, skewX, 1, area.GetX(), baseline);
+
         canvas.ShowText(text);
         canvas.EndText();
+    }
+
+    private static float FitText(
+        PdfFont font,
+        string value,
+        float initialSize,
+        float maxWidth,
+        float skewX = 0f)
+    {
+        var size = initialSize;
+
+        while (size > MinFontSize)
+        {
+            var plainWidth = font.GetWidth(value, size);
+
+            var skewExtraWidth = Math.Abs(skewX) * size;
+
+            if (plainWidth + skewExtraWidth <= maxWidth)
+            {
+                break;
+            }
+
+            size -= 0.2f;
+        }
+
+        return Math.Max(MinFontSize, size);
     }
 
     private static float FitText(PdfFont font, string value, float initialSize, float maxWidth)
