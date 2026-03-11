@@ -15,7 +15,9 @@ namespace VegaFileConstructor.Services;
 
 public class PdfTextReplaceService(IWebHostEnvironment env) : IPdfTextReplaceService
 {
-    private const string DefaultFontPath = @"C:\Users\Пользователь\AppData\Local\Microsoft\Windows\Fonts\GOST.ttf";
+    private readonly string _defaultFontPath =
+        System.IO.Path.Combine(env.ContentRootPath, "Fonts", "GOST.ttf");
+
     private const float MinFontSize = 4f;
     private const float MaxFontScale = 0.98f;
     private const float LineGroupTolerance = 2.5f;
@@ -161,11 +163,11 @@ public class PdfTextReplaceService(IWebHostEnvironment env) : IPdfTextReplaceSer
         return true;
     }
 
-    private static PdfFont CreateUnicodeFont()
+    private PdfFont CreateUnicodeFont()
     {
-        if (File.Exists(DefaultFontPath))
+        if (File.Exists(_defaultFontPath))
         {
-            return PdfFontFactory.CreateFont(DefaultFontPath, PdfEncodings.IDENTITY_H);
+            return PdfFontFactory.CreateFont(_defaultFontPath, PdfEncodings.IDENTITY_H);
         }
 
         return PdfFontFactory.CreateFont(StandardFonts.HELVETICA);

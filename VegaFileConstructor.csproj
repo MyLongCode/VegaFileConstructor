@@ -16,4 +16,10 @@
     </PackageReference>
     <PackageReference Include="iText7" Version="8.0.0" />
   </ItemGroup>
+	<ItemGroup>
+		<Content Include="Fonts\GOST.ttf">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+			<CopyToPublishDirectory>Always</CopyToPublishDirectory>
+		</Content>
+	</ItemGroup>
 </Project>
